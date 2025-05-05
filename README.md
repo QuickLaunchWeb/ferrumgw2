@@ -1,5 +1,7 @@
 # Ferrum API Gateway
 
+WIP - TODO refactor from hyper .14.x to 1.6 ... anyone wanna PR it :D ? 
+
 A high-performance API Gateway and Reverse Proxy written in Rust, featuring robust TLS support, flexible routing, and configurable proxying capabilities.
 
 ## Overview
