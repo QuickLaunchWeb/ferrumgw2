@@ -1,0 +1,52 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock should be included for libraries but not binaries
+# Since this is an application, we'll ignore it
+Cargo.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+*.swp
+*~
+.DS_Store
+
+# Environment variables and local configs
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Self-signed certificates
+/certs/
+*.pem
+*.key
+*.crt
+*.cert
+*.pfx
+*.p12
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage reports
+coverage/
+
+# Temporary files
+tmp/
+temp/
