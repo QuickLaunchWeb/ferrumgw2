@@ -75,6 +75,15 @@ RUST_LOG=debug cargo run
 | KEY_PATH          | Path to TLS private key               | certs/key.pem |
 | LOG_LEVEL         | Logging level                         | info        |
 
+### HTTPS Configuration
+
+TLS is supported out of the box with configurable certificate paths.
+
+- HTTPS is automatically enabled when both `CERT_PATH` and `KEY_PATH` are provided
+- HTTPS server supports both HTTP/1.1 and HTTP/2 protocols
+- HTTP/2 is negotiated via ALPN (Application-Layer Protocol Negotiation)
+- Default TLS configuration includes modern cipher suites for security
+
 ### Proxy Configuration
 
 Proxies are configured via a YAML file. Example:
@@ -148,6 +157,13 @@ To run the functional tests:
 cd tests/functional
 ./run_tests.sh
 ```
+
+The functional tests verify:
+- HTTP routing and proxying
+- HTTPS routing and proxying
+- HTTP/2 protocol support
+- Error handling
+- Content type handling
 
 #### Test Configuration
 

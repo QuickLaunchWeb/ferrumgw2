@@ -333,7 +333,13 @@ pub async fn run_server(addr: SocketAddr, app_state: Arc<AppState>,
                     
                     // Create HTTP protocol handler with HTTP/2 support
                     let mut http = Http::new();
+                    
+                    // Support both HTTP/1.1 and HTTP/2, allowing HTTP/2 to be negotiated via ALPN
                     http.http2_only(false);
+                    http.http2_initial_stream_window_size(1024 * 1024);  // 1MB
+                    http.http2_initial_connection_window_size(1024 * 1024 * 10); // 10MB
+                    http.http2_adaptive_window(true);
+                    http.http2_keep_alive_interval(Some(std::time::Duration::from_secs(30)));
                     
                     // Serve connection
                     if let Err(e) = http.serve_connection(tls_stream, service).await {
