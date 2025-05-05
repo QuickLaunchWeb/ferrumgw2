@@ -9,6 +9,9 @@ use matchit::Router;
 use serde::Deserialize;
 use tracing::{debug, error, info};
 
+// Add the imports needed for rustls configuration
+use rustls::{ClientConfig, RootCertStore};
+
 use crate::error::GatewayError;
 
 /// Proxy configuration file structure that matches YAML format
@@ -46,6 +49,9 @@ pub struct ProxyDefinition {
     
     #[serde(default = "default_backend_write_timeout_ms")]
     pub backend_write_timeout_ms: u64,
+    
+    #[serde(default = "default_skip_certificate_verification")]
+    pub skip_certificate_verification: bool,
 }
 
 /// Default values for ProxyDefinition fields
@@ -77,6 +83,27 @@ pub fn default_backend_write_timeout_ms() -> u64 {
     30000
 }
 
+pub fn default_skip_certificate_verification() -> bool {
+    false
+}
+
+// Custom certificate verifier that accepts all certificates
+struct NoCertificateVerification {}
+
+impl rustls::client::ServerCertVerifier for NoCertificateVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
+}
+
 /// Application state shared across request handlers
 #[derive(Clone)]
 pub struct AppState {
@@ -93,15 +120,43 @@ impl AppState {
         // This should now be created in main.rs and passed to this function
         let http_client = Client::new();
         
-        // Create the HTTPS connector using rustls
-        let https_connector = HttpsConnectorBuilder::new()
-            .with_native_roots()
-            .https_only()
-            .enable_http1()
-            .enable_http2()
-            .build();
+        // Check if any proxy requires certificate verification to be skipped
+        let skip_verification = proxies.iter().any(|p| p.skip_certificate_verification);
+        
+        // Create HTTPS client with appropriate certificate verification settings
+        let https_client = if skip_verification {
+            debug!("Creating HTTPS client with certificate verification disabled");
             
-        let https_client = Client::builder().build(https_connector);
+            // Create a custom root store and client config
+            let root_store = RootCertStore::empty();
+            let mut client_config = ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(root_store)
+                .with_no_client_auth();
+            
+            // Set our custom certificate verifier that accepts all certificates
+            client_config.dangerous().set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+            
+            // Create the HTTPS connector with our custom configuration
+            let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+                .with_tls_config(client_config)
+                .https_only()
+                .enable_http1()
+                .enable_http2()
+                .build();
+                
+            Client::builder().build(https_connector)
+        } else {
+            // Standard HTTPS client with default verification
+            let https_connector = HttpsConnectorBuilder::new()
+                .with_native_roots()
+                .https_only()
+                .enable_http1()
+                .enable_http2()
+                .build();
+                
+            Client::builder().build(https_connector)
+        };
         
         Ok(Self {
             router: Arc::new(router),
