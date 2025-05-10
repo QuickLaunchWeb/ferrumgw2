@@ -69,6 +69,7 @@ async fn test_handle_request_for_known_route() {
         backend_connect_timeout_ms: 3000,
         backend_read_timeout_ms: 30000,
         backend_write_timeout_ms: 30000,
+        skip_certificate_verification: false,
     };
     
     router.insert("/api", proxy).unwrap();
@@ -185,11 +186,12 @@ async fn test_path_rewriting_with_strip_listen_path() {
         backend_host: "127.0.0.1".to_string(),
         backend_port: 8081,
         backend_path: "/backend".to_string(),
-        strip_listen_path: true, // We'll strip the listen_path for this test
+        strip_listen_path: true,
         preserve_host_header: false,
         backend_connect_timeout_ms: 3000,
         backend_read_timeout_ms: 30000,
         backend_write_timeout_ms: 30000,
+        skip_certificate_verification: false,
     };
     
     // Use /rewrite/:path to match any path that starts with /rewrite
@@ -264,6 +266,7 @@ async fn test_https_backend() {
         backend_connect_timeout_ms: 5000,
         backend_read_timeout_ms: 30000,
         backend_write_timeout_ms: 30000,
+        skip_certificate_verification: false,
     };
     
     router.insert("/https-test", proxy).unwrap();

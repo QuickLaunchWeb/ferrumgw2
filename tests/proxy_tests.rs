@@ -141,6 +141,7 @@ fn test_build_router() {
             backend_connect_timeout_ms: 3000,
             backend_read_timeout_ms: 30000,
             backend_write_timeout_ms: 30000,
+            skip_certificate_verification: false,
         },
         ProxyDefinition {
             id: "test-api-2".to_string(),
@@ -155,6 +156,7 @@ fn test_build_router() {
             backend_connect_timeout_ms: 3000,
             backend_read_timeout_ms: 30000,
             backend_write_timeout_ms: 30000,
+            skip_certificate_verification: false,
         },
         ProxyDefinition {
             id: "wildcard-service".to_string(),
@@ -169,6 +171,7 @@ fn test_build_router() {
             backend_connect_timeout_ms: 3000,
             backend_read_timeout_ms: 30000,
             backend_write_timeout_ms: 30000,
+            skip_certificate_verification: false,
         },
     ];
     

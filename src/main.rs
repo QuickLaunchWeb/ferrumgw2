@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use dotenv::dotenv;
-use tracing::{debug, info, trace, warn, error};
+use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, fmt};
 
 // Import from our own crate
