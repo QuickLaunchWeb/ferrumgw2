@@ -194,9 +194,9 @@ async fn test_path_rewriting_with_strip_listen_path() {
         skip_certificate_verification: false,
     };
     
-    // Use /rewrite/:path to match any path that starts with /rewrite
-    // In matchit, we need to use named parameters (with :) for wildcards
-    router.insert("/rewrite/:path", proxy).unwrap();
+    // Use /rewrite/{path} to match any path that starts with /rewrite
+    // In matchit 0.8, we need to use named parameters (with {}) for wildcards
+    router.insert("/rewrite/{path}", proxy).unwrap();
     
     // Create HTTP and HTTPS clients for the tests
     let http_client = hyper::Client::new();
@@ -240,11 +240,10 @@ async fn test_path_rewriting_with_strip_listen_path() {
     let body_bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
     let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
     
-    // Verify the response contains the expected text from our backend
     assert_eq!(body_str, backend_response);
     
-    // Shutdown the test backend
-    let _ = shutdown_tx.send(());
+    // Clean up
+    shutdown_tx.send(()).ok();
 }
 
 #[tokio::test]

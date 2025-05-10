@@ -31,30 +31,32 @@ impl ServerConfig {
     pub fn from_env() -> Result<Self, GatewayError> {
         // Load HTTP port with default
         let http_port = match env::var("HTTP_PORT") {
-            Ok(port_str) => match port_str.parse::<u16>() {
+            Ok(port_str) if !port_str.is_empty() => match port_str.parse::<u16>() {
                 Ok(port) => port,
                 Err(_) => {
                     error!("Invalid HTTP_PORT value: {}, using default", port_str);
                     Self::default_http_port()
                 }
             },
-            Err(_) => {
-                info!("HTTP_PORT not set, using default {}", Self::default_http_port());
+            Ok(_) | Err(env::VarError::NotPresent) => Self::default_http_port(),
+            Err(e) => {
+                error!("Error reading HTTP_PORT: {}, using default", e);
                 Self::default_http_port()
             }
         };
         
         // Load HTTPS port with default
         let https_port = match env::var("HTTPS_PORT") {
-            Ok(port_str) => match port_str.parse::<u16>() {
+            Ok(port_str) if !port_str.is_empty() => match port_str.parse::<u16>() {
                 Ok(port) => port,
                 Err(_) => {
                     error!("Invalid HTTPS_PORT value: {}, using default", port_str);
                     Self::default_https_port()
                 }
             },
-            Err(_) => {
-                info!("HTTPS_PORT not set, using default {}", Self::default_https_port());
+            Ok(_) | Err(env::VarError::NotPresent) => Self::default_https_port(),
+            Err(e) => {
+                error!("Error reading HTTPS_PORT: {}, using default", e);
                 Self::default_https_port()
             }
         };
@@ -102,8 +104,16 @@ impl ServerConfig {
         Ok(ServerConfig {
             http_port,
             https_port,
-            tls_cert_path,
-            tls_key_path,
+            tls_cert_path: if tls_cert_path.is_some() && tls_cert_path.as_ref().unwrap().to_str().unwrap().is_empty() {
+                None
+            } else {
+                tls_cert_path
+            },
+            tls_key_path: if tls_key_path.is_some() && tls_key_path.as_ref().unwrap().to_str().unwrap().is_empty() {
+                None
+            } else {
+                tls_key_path
+            },
             proxy_config_path,
         })
     }

@@ -161,7 +161,7 @@ fn test_build_router() {
         ProxyDefinition {
             id: "wildcard-service".to_string(),
             name: "Wildcard Service".to_string(),
-            listen_path: "/service/:id".to_string(),
+            listen_path: "/service/{id}".to_string(),
             backend_protocol: "http".to_string(),
             backend_host: "localhost".to_string(),
             backend_port: 8003,
@@ -175,27 +175,24 @@ fn test_build_router() {
         },
     ];
     
-    // Build router
-    let result = build_router(&proxies);
-    assert!(result.is_ok());
-    
-    let router = result.unwrap();
+    // Build router and test pre-inserted routes
+    let router = build_router(&proxies).unwrap();
     
     // Test exact path matching
     let match_result = router.at("/api/v1");
-    assert!(match_result.is_ok());
+    assert!(match_result.is_ok(), "Route /api/v1 should exist");
     let matched = match_result.unwrap();
     assert_eq!(matched.value.id, "test-api-1");
     
     // Test path with added leading slash
     let match_result = router.at("/api/v2");
-    assert!(match_result.is_ok());
+    assert!(match_result.is_ok(), "Route /api/v2 should exist");
     let matched = match_result.unwrap();
     assert_eq!(matched.value.id, "test-api-2");
     
-    // Test wildcard path matching
+    // Test parameterized path matching (new matchit 0.8 syntax)
     let match_result = router.at("/service/123");
-    assert!(match_result.is_ok());
+    assert!(match_result.is_ok(), "Route /service/{{id}} should exist");
     let matched = match_result.unwrap();
     assert_eq!(matched.value.id, "wildcard-service");
     assert_eq!(matched.params.get("id"), Some("123"));

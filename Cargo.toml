@@ -4,20 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.28", features = ["full"] }
-hyper = { version = "0.14", features = ["full"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tokio = { version = "1.37", features = ["full"] }
+hyper = { version = "0.14", features = ["full"] }  # Will update last
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt"] }
 dotenv = "0.15"
-serde = { version = "1.0", features = ["derive"] }
-thiserror = "1.0"
-serde_yaml = "0.9"
-matchit = "0.7"
-hyper-rustls = { version = "0.23", features = ["http2"] }
-rustls = { version = "0.20", features = ["dangerous_configuration"] }
-rustls-pemfile = "1.0"
-tokio-rustls = "0.23"
-futures-util = "0.3"
+serde = { version = "1.0.197", features = ["derive"] }
+thiserror = "1.0.58"
+serde_yaml = "0.9"  # Will update after hyper
+matchit = "0.8"
+hyper-rustls = { version = "0.23", features = ["http2"] }  # Will update with hyper
+rustls = { version = "0.20", features = ["dangerous_configuration"] }  # Will update with hyper
+rustls-pemfile = "1.0"  # Will update with hyper
+tokio-rustls = "0.23"  # Will update with hyper
+futures-util = "0.3.30"
 
 [dev-dependencies]
-tracing-test = "0.2"
+tracing-test = "0.2.5"
+tempfile = "3.10"

@@ -40,31 +40,27 @@ pub async fn handle_request(req: Request<Body>, state: Arc<AppState>)
             
             debug!("Route matched: id={}, name={}", proxy.id, proxy.name);
             
-            // Construct target URI
-            let path_to_forward = if proxy.strip_listen_path {
-                // Remove the listen_path from the beginning of the request path
-                let request_path = req.uri().path();
-                if request_path.starts_with(&proxy.listen_path) {
-                    // If the listen_path is "/api" and request is "/api/users", the forwarded path becomes "/users"
-                    let remaining_path = &request_path[proxy.listen_path.len()..];
-                    if remaining_path.is_empty() {
-                        proxy.backend_path.clone()
-                    } else if proxy.backend_path.ends_with('/') && remaining_path.starts_with('/') {
-                        // Avoid double slashes
-                        format!("{}{}", &proxy.backend_path[..proxy.backend_path.len()-1], remaining_path)
-                    } else if !proxy.backend_path.ends_with('/') && !remaining_path.starts_with('/') {
-                        // Add slash between paths
-                        format!("{}/{}", proxy.backend_path, remaining_path)
-                    } else {
-                        format!("{}{}", proxy.backend_path, remaining_path)
-                    }
-                } else {
-                    // This shouldn't happen if the router matched correctly
-                    format!("{}{}", proxy.backend_path, req.uri().path())
+            // Handle path rewriting
+            let mut path = matched.params.get("path").map(|p| p.to_string()).unwrap_or_default();
+            
+            if proxy.strip_listen_path {
+                // If we're stripping the listen path, we need to reconstruct the full path
+                // from the matched parameter
+                if !path.starts_with('/') {
+                    path = format!("/{}", path);
                 }
             } else {
-                // Forward the full path
-                format!("{}{}", proxy.backend_path, req.uri().path())
+                // Otherwise prepend the listen path
+                path = format!("{}{}", proxy.listen_path, path);
+            }
+            
+            // Combine with the backend path
+            let backend_path = if proxy.backend_path.ends_with('/') && path.starts_with('/') {
+                format!("{}{}", proxy.backend_path, &path[1..])
+            } else if !proxy.backend_path.ends_with('/') && !path.starts_with('/') && !path.is_empty() {
+                format!("{}/{}", proxy.backend_path, path)
+            } else {
+                format!("{}{}", proxy.backend_path, path)
             };
             
             // Create query string if present
@@ -76,7 +72,7 @@ pub async fn handle_request(req: Request<Body>, state: Arc<AppState>)
                 proxy.backend_protocol,
                 proxy.backend_host,
                 proxy.backend_port,
-                path_to_forward,
+                backend_path,
                 query_string
             );
             

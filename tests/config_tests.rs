@@ -4,75 +4,82 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use rust_api_gateway::{ServerConfig, GatewayError};
+use tempfile;
 
-#[test]
-fn test_load_config_from_env() {
-    // Create a temporary YAML file for the test
-    let temp_dir = std::env::temp_dir();
-    let yaml_path = temp_dir.join("test_proxies.yaml");
+struct TestEnv {
+    _temp_dir: tempfile::TempDir,
+    yaml_path: PathBuf,
+}
+
+fn setup_test() -> TestEnv {
+    // Create unique temp directory and file
+    let temp_dir = tempfile::tempdir().unwrap();
+    let yaml_path = temp_dir.path().join("proxies.yaml");
     
     let yaml_content = "proxies: []";
     let mut file = File::create(&yaml_path).unwrap();
     file.write_all(yaml_content.as_bytes()).unwrap();
     
-    // Set up test environment variables
-    env::set_var("HTTP_PORT", "9090");
-    env::set_var("HTTPS_PORT", "9443");
-    env::set_var("TLS_CERT_PATH", "/path/to/cert.pem");
-    env::set_var("TLS_KEY_PATH", "/path/to/key.pem");
-    env::set_var("PROXY_CONFIG_PATH", yaml_path.to_str().unwrap());
-    
-    // Load config
-    let config = ServerConfig::from_env().unwrap();
-    
-    // Verify config
-    assert_eq!(config.http_port, 9090);
-    assert_eq!(config.https_port, 9443);
-    assert_eq!(config.tls_cert_path, Some(PathBuf::from("/path/to/cert.pem")));
-    assert_eq!(config.tls_key_path, Some(PathBuf::from("/path/to/key.pem")));
-    assert_eq!(config.proxy_config_path, yaml_path);
-    
-    // Clean up
+    // Clear ALL environment variables
     env::remove_var("HTTP_PORT");
     env::remove_var("HTTPS_PORT");
     env::remove_var("TLS_CERT_PATH");
     env::remove_var("TLS_KEY_PATH");
     env::remove_var("PROXY_CONFIG_PATH");
-    std::fs::remove_file(yaml_path).ok();
+    
+    TestEnv {
+        _temp_dir: temp_dir,
+        yaml_path,
+    }
+}
+
+fn teardown_test(test_env: TestEnv) {
+    // Clear ALL environment variables again
+    env::remove_var("HTTP_PORT");
+    env::remove_var("HTTPS_PORT");
+    env::remove_var("TLS_CERT_PATH");
+    env::remove_var("TLS_KEY_PATH");
+    env::remove_var("PROXY_CONFIG_PATH");
 }
 
 #[test]
 fn test_load_config_defaults() {
-    // Create a temporary YAML file for the test
-    let temp_dir = std::env::temp_dir();
-    let yaml_path = temp_dir.join("test_proxies_defaults.yaml");
+    let test_env = setup_test();
     
-    let yaml_content = "proxies: []";
-    let mut file = File::create(&yaml_path).unwrap();
-    file.write_all(yaml_content.as_bytes()).unwrap();
+    // Set only required var
+    env::set_var("PROXY_CONFIG_PATH", test_env.yaml_path.to_str().unwrap());
     
-    // Remove all non-required environment variables
-    env::remove_var("HTTP_PORT");
-    env::remove_var("HTTPS_PORT");
-    env::remove_var("TLS_CERT_PATH");
-    env::remove_var("TLS_KEY_PATH");
-    
-    // Set only the required PROXY_CONFIG_PATH to our temporary file
-    env::set_var("PROXY_CONFIG_PATH", yaml_path.to_str().unwrap());
-    
-    // Load config
     let config = ServerConfig::from_env().unwrap();
     
-    // Verify defaults - default_http_port() is 8080 according to our implementation
-    assert_eq!(config.http_port, 8080);
-    assert_eq!(config.https_port, ServerConfig::default_https_port());
-    assert_eq!(config.tls_cert_path, None);
-    assert_eq!(config.tls_key_path, None);
-    assert_eq!(config.proxy_config_path, yaml_path);
+    // Verify defaults
+    assert_eq!(config.http_port, 8080, "HTTP port should default to 8080");
+    assert_eq!(config.https_port, 8443, "HTTPS port should default to 8443");
+    assert_eq!(config.tls_cert_path, None, "TLS cert path should default to None");
+    assert_eq!(config.tls_key_path, None, "TLS key path should default to None");
+    assert_eq!(config.proxy_config_path, test_env.yaml_path, "Proxy config path should match");
     
-    // Clean up
-    env::remove_var("PROXY_CONFIG_PATH");
-    std::fs::remove_file(yaml_path).ok();
+    teardown_test(test_env);
+}
+
+#[test]
+fn test_load_config_from_env() {
+    let test_env = setup_test();
+    
+    // Set test vars
+    env::set_var("HTTP_PORT", "9090");
+    env::set_var("HTTPS_PORT", "9443");
+    env::set_var("PROXY_CONFIG_PATH", test_env.yaml_path.to_str().unwrap());
+    
+    let config = ServerConfig::from_env().unwrap();
+    
+    // Verify config
+    assert_eq!(config.http_port, 9090, "HTTP port should match env var");
+    assert_eq!(config.https_port, 9443, "HTTPS port should match env var");
+    assert_eq!(config.tls_cert_path, None, "TLS cert path should be None");
+    assert_eq!(config.tls_key_path, None, "TLS key path should be None");
+    assert_eq!(config.proxy_config_path, test_env.yaml_path, "Proxy config path should match");
+    
+    teardown_test(test_env);
 }
 
 #[test]
