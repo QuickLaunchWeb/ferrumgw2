@@ -4,21 +4,26 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.37", features = ["full"] }
-hyper = { version = "0.14", features = ["full"] }  # Will update last
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt"] }
-dotenv = "0.15"
-serde = { version = "1.0.197", features = ["derive"] }
-thiserror = "1.0.58"
-serde_yaml = "0.9"  # Will update after hyper
-matchit = "0.8"
-hyper-rustls = { version = "0.23", features = ["http2"] }  # Will update with hyper
-rustls = { version = "0.20", features = ["dangerous_configuration"] }  # Will update with hyper
-rustls-pemfile = "1.0"  # Will update with hyper
-tokio-rustls = "0.23"  # Will update with hyper
-futures-util = "0.3.30"
+tokio = { version = "1.0", features = ["full"] }
+hyper = { version = "1.0", features = ["server", "client", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["full"] }
+hyper-rustls = "0.27"
+rustls = "0.23"
+rustls-pemfile = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+matchit = "0.7"
+thiserror = "1.0"
+http = "1.0"
+http-body-util = "0.1"
+bytes = "1.0"
 
 [dev-dependencies]
-tracing-test = "0.2.5"
-tempfile = "3.10"
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+tracing-test = "0.2"
+tempfile = "3.8"
+
+[workspace.dependencies]
+tracing = { version = "0.1", features = ["std"] }

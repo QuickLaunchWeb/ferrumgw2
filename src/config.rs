@@ -118,3 +118,25 @@ impl ServerConfig {
         })
     }
 }
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    pub port: u16,
+    pub proxy_config_path: PathBuf,
+}
+
+pub fn load_config() -> Result<Config, GatewayError> {
+    let port = env::var("PORT")
+        .unwrap_or_else(|_| "8081".to_string())
+        .parse()
+        .map_err(|_| GatewayError::Config("Invalid PORT value".to_string()))?;
+    
+    let proxy_config_path = env::var("PROXY_CONFIG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("config/proxies.yaml"));
+    
+    Ok(Config {
+        port,
+        proxy_config_path,
+    })
+}

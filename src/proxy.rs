@@ -1,221 +1,131 @@
-use std::fs::File;
-use std::io::Read;
-use std::path::PathBuf;
 use std::sync::Arc;
-
-use hyper::{Client, client::HttpConnector};
+use hyper_util::client::legacy::connect::HttpConnector;
+use rustls::client::danger::{ServerCertVerifier, ServerCertVerified, HandshakeSignatureValid};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::DigitallySignedStruct;
+use rustls::Error;
+use rustls::SignatureScheme;
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use matchit::Router;
-use serde::Deserialize;
-use tracing::{debug, error, info};
-
-// Add the imports needed for rustls configuration
-use rustls::{ClientConfig, RootCertStore};
-
 use crate::error::GatewayError;
+use serde::Deserialize;
+use std::fs;
+use serde_yaml;
+use std::path::Path;
 
-/// Proxy configuration file structure that matches YAML format
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProxyConfigFile {
-    pub proxies: Vec<ProxyDefinition>,
-}
-
-/// Proxy definition structure for routing rules
-#[derive(Debug, Clone, Deserialize)]
-pub struct ProxyDefinition {
+#[derive(Debug, Deserialize, Clone)]
+pub struct Proxy {
     pub id: String,
-    pub name: String,
     pub listen_path: String,
     pub backend_protocol: String,
     pub backend_host: String,
-    
-    #[serde(default = "default_backend_port")]
     pub backend_port: u16,
-    
-    #[serde(default = "default_backend_path")]
     pub backend_path: String,
-    
-    #[serde(default = "default_strip_listen_path")]
     pub strip_listen_path: bool,
-    
-    #[serde(default = "default_preserve_host_header")]
     pub preserve_host_header: bool,
-    
-    #[serde(default = "default_backend_connect_timeout_ms")]
     pub backend_connect_timeout_ms: u64,
-    
-    #[serde(default = "default_backend_read_timeout_ms")]
     pub backend_read_timeout_ms: u64,
-    
-    #[serde(default = "default_backend_write_timeout_ms")]
     pub backend_write_timeout_ms: u64,
-    
-    #[serde(default = "default_skip_certificate_verification")]
-    pub skip_certificate_verification: bool,
 }
 
-/// Default values for ProxyDefinition fields
-pub fn default_backend_port() -> u16 {
-    80
+#[derive(Debug, Deserialize, Clone)]
+pub struct ProxyConfig {
+    pub id: String,
+    pub listen_path: String,
+    pub backend_protocol: String,
+    pub backend_host: String,
+    pub backend_port: u16,
+    pub backend_path: String,
+    pub strip_listen_path: bool,
+    pub preserve_host_header: bool,
+    pub backend_connect_timeout_ms: u64,
+    pub backend_read_timeout_ms: u64,
+    pub backend_write_timeout_ms: u64,
 }
 
-pub fn default_backend_path() -> String {
-    "/".to_string()
-}
+#[derive(Debug)]
+pub struct NoCertificateVerification;
 
-pub fn default_strip_listen_path() -> bool {
-    false
-}
-
-pub fn default_preserve_host_header() -> bool {
-    false
-}
-
-pub fn default_backend_connect_timeout_ms() -> u64 {
-    3000
-}
-
-pub fn default_backend_read_timeout_ms() -> u64 {
-    30000
-}
-
-pub fn default_backend_write_timeout_ms() -> u64 {
-    30000
-}
-
-pub fn default_skip_certificate_verification() -> bool {
-    false
-}
-
-// Custom certificate verifier that accepts all certificates
-struct NoCertificateVerification {}
-
-impl rustls::client::ServerCertVerifier for NoCertificateVerification {
+impl ServerCertVerifier for NoCertificateVerification {
     fn verify_server_cert(
         &self,
-        _end_entity: &rustls::Certificate,
-        _intermediates: &[rustls::Certificate],
-        _server_name: &rustls::ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
         _ocsp_response: &[u8],
-        _now: std::time::SystemTime,
-    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::ServerCertVerified::assertion())
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        vec![
+            SignatureScheme::RSA_PKCS1_SHA256,
+            SignatureScheme::ECDSA_NISTP256_SHA256,
+            SignatureScheme::RSA_PKCS1_SHA384,
+            SignatureScheme::ECDSA_NISTP384_SHA384,
+            SignatureScheme::RSA_PKCS1_SHA512,
+            SignatureScheme::ECDSA_NISTP521_SHA512,
+            SignatureScheme::RSA_PSS_SHA256,
+            SignatureScheme::RSA_PSS_SHA384,
+            SignatureScheme::RSA_PSS_SHA512,
+        ]
     }
 }
 
-/// Application state shared across request handlers
-#[derive(Clone)]
-pub struct AppState {
-    pub router: Arc<Router<ProxyDefinition>>,
-    pub http_client: Client<HttpConnector>,
-    pub https_client: Client<HttpsConnector<HttpConnector>>,
+pub fn build_https_client(skip_verification: bool) -> Result<HttpsConnector<HttpConnector>, GatewayError> {
+    let root_store = rustls::RootCertStore::empty();
+    
+    let mut config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
+    if skip_verification {
+        config.dangerous().set_certificate_verifier(Arc::new(NoCertificateVerification {}));
+    }
+
+    let https = HttpsConnectorBuilder::new()
+        .with_tls_config(config)
+        .https_or_http()
+        .enable_http1()
+        .build();
+    
+    Ok(https)
 }
 
-impl AppState {
-    /// Create a new AppState with a router populated from the provided proxy definitions
-    pub fn new(proxies: &[ProxyDefinition]) -> Result<Self, GatewayError> {
-        let router = build_router(proxies)?;
-        
-        // This should now be created in main.rs and passed to this function
-        let http_client = Client::new();
-        
-        // Check if any proxy requires certificate verification to be skipped
-        let skip_verification = proxies.iter().any(|p| p.skip_certificate_verification);
-        
-        // Create HTTPS client with appropriate certificate verification settings
-        let https_client = if skip_verification {
-            debug!("Creating HTTPS client with certificate verification disabled");
-            
-            // Create a custom root store and client config
-            let root_store = RootCertStore::empty();
-            let mut client_config = ClientConfig::builder()
-                .with_safe_defaults()
-                .with_root_certificates(root_store)
-                .with_no_client_auth();
-            
-            // Set our custom certificate verifier that accepts all certificates
-            client_config.dangerous().set_certificate_verifier(Arc::new(NoCertificateVerification {}));
-            
-            // Create the HTTPS connector with our custom configuration
-            let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-                .with_tls_config(client_config)
-                .https_only()
-                .enable_http1()
-                .enable_http2()
-                .build();
-                
-            Client::builder().build(https_connector)
-        } else {
-            // Standard HTTPS client with default verification
-            let https_connector = HttpsConnectorBuilder::new()
-                .with_native_roots()
-                .https_only()
-                .enable_http1()
-                .enable_http2()
-                .build();
-                
-            Client::builder().build(https_connector)
-        };
-        
-        Ok(Self {
-            router: Arc::new(router),
-            http_client,
-            https_client,
-        })
-    }
+pub fn load_proxy_config(path: &Path) -> Result<Vec<Proxy>, GatewayError> {
+    let config_file = fs::read_to_string(path)
+        .map_err(|e| GatewayError::TlsConfig(format!("Failed to read proxy config: {}", e)))?;
+    
+    let proxies: Vec<Proxy> = serde_yaml::from_str(&config_file)
+        .map_err(|e| GatewayError::TlsConfig(format!("Failed to parse proxy config: {}", e)))?;
+    
+    Ok(proxies)
 }
 
-/// Load proxy configuration from a YAML file
-pub fn load_proxy_config(path: &PathBuf) -> Result<Vec<ProxyDefinition>, GatewayError> {
-    let mut file = File::open(path).map_err(|e| {
-        let error_msg = format!("Failed to open proxy config file at {}: {}", path.display(), e);
-        error!("{}", error_msg);
-        GatewayError::Io(e)
-    })?;
+pub fn load_proxy_config_from_path(path: &Path) -> Result<Vec<ProxyConfig>, GatewayError> {
+    let config_file = fs::read_to_string(path)
+        .map_err(|e| GatewayError::TlsConfig(format!("Failed to read proxy config: {}", e)))?;
     
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).map_err(|e| {
-        let error_msg = format!("Failed to read proxy config file at {}: {}", path.display(), e);
-        error!("{}", error_msg);
-        GatewayError::Io(e)
-    })?;
+    let proxies: Vec<ProxyConfig> = serde_yaml::from_str(&config_file)
+        .map_err(|e| GatewayError::TlsConfig(format!("Failed to parse proxy config: {}", e)))?;
     
-    let proxy_config: ProxyConfigFile = serde_yaml::from_str(&contents).map_err(|e| {
-        let error_msg = format!("Failed to parse YAML in proxy config file: {}", e);
-        error!("{}", error_msg);
-        GatewayError::Yaml(e)
-    })?;
-    
-    if proxy_config.proxies.is_empty() {
-        let warning_msg = "No proxy definitions found in configuration file";
-        info!("{}", warning_msg);
-    }
-    
-    Ok(proxy_config.proxies)
-}
-
-/// Build a router from a list of proxy definitions
-pub fn build_router(proxies: &[ProxyDefinition]) -> Result<Router<ProxyDefinition>, GatewayError> {
-    let mut router = Router::new();
-    
-    for proxy in proxies {
-        // Ensure the path starts with a forward slash
-        let path = if !proxy.listen_path.starts_with('/') {
-            format!("/{}", proxy.listen_path)
-        } else {
-            proxy.listen_path.clone()
-        };
-        
-        debug!("Adding route: {} -> {}", path, proxy.id);
-        
-        // Insert the proxy definition into the router
-        if let Err(e) = router.insert(&path, proxy.clone()) {
-            let error_msg = format!("Failed to insert route for proxy {}: {}", proxy.id, e);
-            error!("{}", error_msg);
-            return Err(GatewayError::RouterInsert(error_msg));
-        }
-    }
-    
-    Ok(router)
+    Ok(proxies)
 }

@@ -6,8 +6,14 @@ pub mod server;
 pub mod tls;
 
 // Re-export common types for convenient usage
-pub use config::ServerConfig;
+pub use server::{handle_request, serve};
 pub use error::GatewayError;
-pub use proxy::{AppState, ProxyDefinition, load_proxy_config};
-pub use server::{handle_request, run_server};
-pub use tls::load_tls_config;
+pub use proxy::{Proxy, load_proxy_config};
+
+use std::sync::Arc;
+
+pub struct AppState {
+    pub router: Arc<matchit::Router<proxy::Proxy>>,
+    pub http_client: hyper_util::client::legacy::Client<hyper_util::client::legacy::connect::HttpConnector, hyper::body::Incoming>,
+    pub https_client: hyper_util::client::legacy::Client<hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>, hyper::body::Incoming>,
+}
